@@ -10,7 +10,7 @@ const menuItems = [
   },
   {
     label: "Import Leads",
-    href: "/agent/import-leads",
+    href: "/agent/import",
   },
   {
     label: "My Leads",
@@ -21,8 +21,8 @@ const menuItems = [
     href: "/agent/calling",
   },
   {
-    label: "Call History",
-    href: "/agent/call-history",
+    label: "Profile",
+    href: "/agent/profile",
   },
 ];
 
