@@ -10,6 +10,7 @@ import {
   leadStatusStyles,
 } from "@/lib/format";
 import LeadStatusActions from "./LeadStatusActions";
+import EditLeadButton from "./EditLeadButton";
 
 export default async function LeadDetailPage({
   params,
@@ -18,18 +19,26 @@ export default async function LeadDetailPage({
 }) {
   const { id } = await params;
 
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      region: { select: { name: true } },
-      agent: { select: { name: true } },
-      createdBy: { select: { name: true } },
-      callLogs: {
-        orderBy: { startedAt: "desc" },
-        include: { agent: { select: { name: true } } },
+  const [lead, regions, agents] = await Promise.all([
+    prisma.lead.findUnique({
+      where: { id },
+      include: {
+        region: { select: { name: true } },
+        agent: { select: { name: true } },
+        createdBy: { select: { name: true } },
+        callLogs: {
+          orderBy: { startedAt: "desc" },
+          include: { agent: { select: { name: true } } },
+        },
       },
-    },
-  });
+    }),
+    prisma.region.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.user.findMany({
+      where: { role: "AGENT" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   if (!lead) {
     notFound();
@@ -65,12 +74,16 @@ export default async function LeadDetailPage({
             </div>
           </div>
 
-          <a
-            href={`tel:${lead.phone}`}
-            className="w-fit rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            Call Customer
-          </a>
+          <div className="flex flex-wrap gap-3">
+            <EditLeadButton lead={lead} regions={regions} agents={agents} />
+
+            <a
+              href={`tel:${lead.phone}`}
+              className="w-fit rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+            >
+              Call Customer
+            </a>
+          </div>
         </div>
       </div>
 
