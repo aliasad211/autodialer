@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { CallOutcome, CallStatus } from "@/generated/prisma";
 import {
   callOutcomeLabels,
@@ -8,6 +7,8 @@ import {
   formatDateTime,
   formatDuration,
 } from "@/lib/format";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import Pagination from "@/components/ui/Pagination";
 
 type CallRow = {
   id: string;
@@ -23,27 +24,20 @@ type Props = {
   calls: CallRow[];
   regions: { id: string; name: string }[];
   agents: { id: string; name: string }[];
+  pagination: { page: number; total: number; pageSize: number };
+  filters: { q: string; region: string; agent: string; outcome: string };
   stats: { totalCalls: number; callsToday: number; interestedToday: number; avgDuration: number };
 };
 
-export default function CallLogsTable({ calls, regions, agents, stats }: Props) {
-  const [search, setSearch] = useState("");
-  const [region, setRegion] = useState("All Regions");
-  const [agent, setAgent] = useState("All Agents");
-  const [outcome, setOutcome] = useState("All Outcomes");
-
-  const filteredCalls = calls.filter((call) => {
-    const matchesSearch =
-      call.lead.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      call.lead.phone.includes(search) ||
-      call.agent.name.toLowerCase().includes(search.toLowerCase());
-
-    const matchesRegion = region === "All Regions" || call.lead.region.name === region;
-    const matchesAgent = agent === "All Agents" || call.agent.name === agent;
-    const matchesOutcome = outcome === "All Outcomes" || call.outcome === outcome;
-
-    return matchesSearch && matchesRegion && matchesAgent && matchesOutcome;
-  });
+export default function CallLogsTable({
+  calls,
+  regions,
+  agents,
+  pagination,
+  filters,
+  stats,
+}: Props) {
+  const { setDebounced, setImmediate } = useFilterParams();
 
   return (
     <div className="p-6 lg:p-8">
@@ -86,39 +80,43 @@ export default function CallLogsTable({ calls, regions, agents, stats }: Props) 
           <input
             type="text"
             placeholder="Search customer, phone or agent..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            defaultValue={filters.q}
+            onChange={(e) => setDebounced("q", e.target.value)}
             className="flex-1 rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-gray-400"
           />
 
           <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
+            value={filters.region}
+            onChange={(e) => setImmediate("region", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Regions</option>
+            <option value="">All Regions</option>
             {regions.map((r) => (
-              <option key={r.id}>{r.name}</option>
+              <option key={r.id} value={r.name}>
+                {r.name}
+              </option>
             ))}
           </select>
 
           <select
-            value={agent}
-            onChange={(e) => setAgent(e.target.value)}
+            value={filters.agent}
+            onChange={(e) => setImmediate("agent", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Agents</option>
+            <option value="">All Agents</option>
             {agents.map((a) => (
-              <option key={a.id}>{a.name}</option>
+              <option key={a.id} value={a.name}>
+                {a.name}
+              </option>
             ))}
           </select>
 
           <select
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
+            value={filters.outcome}
+            onChange={(e) => setImmediate("outcome", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Outcomes</option>
+            <option value="">All Outcomes</option>
             {Object.entries(callOutcomeLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -161,7 +159,7 @@ export default function CallLogsTable({ calls, regions, agents, stats }: Props) 
             </thead>
 
             <tbody className="divide-y">
-              {filteredCalls.map((call) => (
+              {calls.map((call) => (
                 <tr key={call.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
@@ -198,7 +196,7 @@ export default function CallLogsTable({ calls, regions, agents, stats }: Props) 
                 </tr>
               ))}
 
-              {filteredCalls.length === 0 && (
+              {calls.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-400">
                     No calls match your filters.
@@ -209,22 +207,12 @@ export default function CallLogsTable({ calls, regions, agents, stats }: Props) 
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
-            Showing {filteredCalls.length} of {stats.totalCalls} calls
-          </p>
-
-          <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Previous
-            </button>
-
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          itemLabel="calls"
+        />
       </div>
     </div>
   );
