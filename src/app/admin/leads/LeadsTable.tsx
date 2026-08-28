@@ -4,6 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import type { LeadStatus } from "@/generated/prisma";
 import { formatDayLabel, initials, leadStatusLabels, leadStatusStyles } from "@/lib/format";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import Pagination from "@/components/ui/Pagination";
+import AddLeadModal from "./AddLeadModal";
 
 type LeadRow = {
   id: string;
@@ -21,6 +24,8 @@ type Props = {
   leads: LeadRow[];
   regions: { id: string; name: string }[];
   agents: { id: string; name: string }[];
+  pagination: { page: number; total: number; pageSize: number };
+  filters: { q: string; region: string; agent: string; status: string };
   stats: {
     total: number;
     newCount: number;
@@ -30,24 +35,16 @@ type Props = {
   };
 };
 
-export default function LeadsTable({ leads, regions, agents, stats }: Props) {
-  const [search, setSearch] = useState("");
-  const [region, setRegion] = useState("All Regions");
-  const [agent, setAgent] = useState("All Agents");
-  const [status, setStatus] = useState("All Status");
-
-  const filteredLeads = leads.filter((lead) => {
-    const matchesSearch =
-      lead.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      lead.phone.includes(search) ||
-      (lead.vehicleInterest ?? "").toLowerCase().includes(search.toLowerCase());
-
-    const matchesRegion = region === "All Regions" || lead.region.name === region;
-    const matchesAgent = agent === "All Agents" || lead.agent?.name === agent;
-    const matchesStatus = status === "All Status" || lead.status === status;
-
-    return matchesSearch && matchesRegion && matchesAgent && matchesStatus;
-  });
+export default function LeadsTable({
+  leads,
+  regions,
+  agents,
+  pagination,
+  filters,
+  stats,
+}: Props) {
+  const { setDebounced, setImmediate } = useFilterParams();
+  const [showAddModal, setShowAddModal] = useState(false);
 
   return (
     <div className="p-6 lg:p-8">
@@ -61,10 +58,21 @@ export default function LeadsTable({ leads, regions, agents, stats }: Props) {
           </p>
         </div>
 
-        <button className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+        >
           + Add Lead
         </button>
       </div>
+
+      {showAddModal && (
+        <AddLeadModal
+          regions={regions}
+          agents={agents}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
 
       {/* Stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -100,39 +108,43 @@ export default function LeadsTable({ leads, regions, agents, stats }: Props) {
           <input
             type="text"
             placeholder="Search name, phone or vehicle..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            defaultValue={filters.q}
+            onChange={(e) => setDebounced("q", e.target.value)}
             className="flex-1 rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-gray-400"
           />
 
           <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
+            value={filters.region}
+            onChange={(e) => setImmediate("region", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Regions</option>
+            <option value="">All Regions</option>
             {regions.map((r) => (
-              <option key={r.id}>{r.name}</option>
+              <option key={r.id} value={r.name}>
+                {r.name}
+              </option>
             ))}
           </select>
 
           <select
-            value={agent}
-            onChange={(e) => setAgent(e.target.value)}
+            value={filters.agent}
+            onChange={(e) => setImmediate("agent", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Agents</option>
+            <option value="">All Agents</option>
             {agents.map((a) => (
-              <option key={a.id}>{a.name}</option>
+              <option key={a.id} value={a.name}>
+                {a.name}
+              </option>
             ))}
           </select>
 
           <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            value={filters.status}
+            onChange={(e) => setImmediate("status", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Status</option>
+            <option value="">All Status</option>
             {Object.entries(leadStatusLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -176,7 +188,7 @@ export default function LeadsTable({ leads, regions, agents, stats }: Props) {
             </thead>
 
             <tbody className="divide-y">
-              {filteredLeads.map((lead) => (
+              {leads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -227,7 +239,7 @@ export default function LeadsTable({ leads, regions, agents, stats }: Props) {
                 </tr>
               ))}
 
-              {filteredLeads.length === 0 && (
+              {leads.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-400">
                     No leads match your filters.
@@ -238,22 +250,12 @@ export default function LeadsTable({ leads, regions, agents, stats }: Props) {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
-            Showing {filteredLeads.length} of {stats.total} leads
-          </p>
-
-          <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Previous
-            </button>
-
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          itemLabel="leads"
+        />
       </div>
     </div>
   );
