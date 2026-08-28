@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CallStatus, LeadStatus } from "@/generated/prisma";
 import { formatDateTime, formatDuration, leadStatusLabels, leadStatusStyles } from "@/lib/format";
 import { logCallAndUpdateLead } from "@/app/actions/leads";
+import CallButton from "@/components/dialer/CallButton";
 
 type LeadDetail = {
   id: string;
@@ -35,7 +36,7 @@ const callStatusOptions: { value: CallStatus; label: string }[] = [
   { value: "REJECTED", label: "Rejected" },
 ];
 
-export default function LeadWorkspace({ lead }: { lead: LeadDetail }) {
+export default function LeadWorkspace({ lead, agentId }: { lead: LeadDetail; agentId: string }) {
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [callStatus, setCallStatus] = useState<CallStatus>("COMPLETED");
   const [isPending, startTransition] = useTransition();
@@ -91,18 +92,19 @@ export default function LeadWorkspace({ lead }: { lead: LeadDetail }) {
               <div>
                 <h2 className="font-semibold text-gray-900">Call Customer</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Contact the customer, then log the outcome below.
+                  Call from the app, then log the outcome below.
                 </p>
               </div>
 
-              <a
-                href={`tel:${lead.phone}`}
-                className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white hover:bg-green-700"
-              >
-                <span>📞</span>
-                Call {lead.phone}
-              </a>
+              <CallButton phone={lead.phone} leadId={lead.id} agentId={agentId} />
             </div>
+
+            <a
+              href={`tel:${lead.phone}`}
+              className="mt-4 inline-block text-xs text-gray-400 hover:text-gray-600 hover:underline"
+            >
+              Or call {lead.phone} from your own phone instead
+            </a>
           </div>
 
           {/* Log Call */}
@@ -117,7 +119,9 @@ export default function LeadWorkspace({ lead }: { lead: LeadDetail }) {
           >
             <h2 className="font-semibold text-gray-900">Log This Call</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Record what happened and update the lead.
+              If you called through the app, the result and duration were already recorded
+              automatically &mdash; just set the outcome and notes below. Fill in Call Result
+              and Duration yourself only if you called from your own phone.
             </p>
 
             <div className="mt-5">

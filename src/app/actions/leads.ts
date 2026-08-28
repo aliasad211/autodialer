@@ -19,6 +19,8 @@ function parseDurationToSeconds(value: string) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+const UNANNOTATED_CALL_WINDOW_MS = 15 * 60 * 1000;
+
 export async function logCallAndUpdateLead(leadId: string, formData: FormData) {
   const session = await requireAgent();
 
@@ -27,29 +29,50 @@ export async function logCallAndUpdateLead(leadId: string, formData: FormData) {
     throw new Error("You are not authorized to update this lead.");
   }
 
-  const callStatus = String(formData.get("callStatus") ?? "COMPLETED") as CallStatus;
   const status = String(formData.get("status") ?? lead.status) as LeadStatus;
   const notes = String(formData.get("notes") ?? "").trim();
-  const durationInput = String(formData.get("duration") ?? "").trim();
   const followUpInput = String(formData.get("followUpAt") ?? "").trim();
 
-  const duration = callStatus === "COMPLETED" ? parseDurationToSeconds(durationInput) : null;
+  // If the in-app dialer just logged a call for this lead and it hasn't been
+  // annotated yet, attach this outcome to it instead of creating a duplicate.
+  const pendingCall = await prisma.callLog.findFirst({
+    where: {
+      leadId,
+      agentId: session.userId,
+      outcome: null,
+      notes: null,
+      startedAt: { gte: new Date(Date.now() - UNANNOTATED_CALL_WINDOW_MS) },
+    },
+    orderBy: { startedAt: "desc" },
+  });
+
+  const callStatus = pendingCall?.callStatus ?? (String(formData.get("callStatus") ?? "COMPLETED") as CallStatus);
   const outcome = callStatus === "COMPLETED" ? LEAD_STATUS_TO_OUTCOME[status] : null;
-  const startedAt = new Date();
 
   await prisma.$transaction(async (tx) => {
-    await tx.callLog.create({
-      data: {
-        leadId,
-        agentId: session.userId,
-        startedAt,
-        endedAt: duration ? new Date(startedAt.getTime() + duration * 1000) : startedAt,
-        duration,
-        callStatus,
-        outcome,
-        notes: notes || null,
-      },
-    });
+    if (pendingCall) {
+      await tx.callLog.update({
+        where: { id: pendingCall.id },
+        data: { outcome, notes: notes || null },
+      });
+    } else {
+      const durationInput = String(formData.get("duration") ?? "").trim();
+      const duration = callStatus === "COMPLETED" ? parseDurationToSeconds(durationInput) : null;
+      const startedAt = new Date();
+
+      await tx.callLog.create({
+        data: {
+          leadId,
+          agentId: session.userId,
+          startedAt,
+          endedAt: duration ? new Date(startedAt.getTime() + duration * 1000) : startedAt,
+          duration,
+          callStatus,
+          outcome,
+          notes: notes || null,
+        },
+      });
+    }
 
     await tx.lead.update({
       where: { id: leadId },

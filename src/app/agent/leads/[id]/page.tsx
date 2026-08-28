@@ -27,5 +27,5 @@ export default async function LeadDetailPage({
     notFound();
   }
 
-  return <LeadWorkspace lead={lead} />;
+  return <LeadWorkspace lead={lead} agentId={session.userId} />;
 }
