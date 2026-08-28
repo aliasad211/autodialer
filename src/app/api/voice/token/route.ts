@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { createVoiceAccessToken, isTwilioConfigured } from "@/lib/twilio";
+import { createVoiceAccessToken, isPlivoConfigured } from "@/lib/plivo";
 
 export async function POST() {
   const session = await getSession();
@@ -9,14 +9,14 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!isTwilioConfigured()) {
+  if (!isPlivoConfigured()) {
     return NextResponse.json(
-      { error: "Calling is not configured yet. Add the Twilio variables to .env." },
+      { error: "Calling is not configured yet. Add the Plivo variables to .env." },
       { status: 503 }
     );
   }
 
-  const token = createVoiceAccessToken(session.userId);
+  const token = await createVoiceAccessToken(session.userId);
 
   return NextResponse.json({ token });
 }
