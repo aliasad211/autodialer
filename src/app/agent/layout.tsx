@@ -1,10 +1,13 @@
 import AgentSidebar from "@/components/agent/AgentSidebar";
+import { requireAgent } from "@/lib/dal";
 
-export default function AgentLayout({
+export default async function AgentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireAgent();
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <AgentSidebar />

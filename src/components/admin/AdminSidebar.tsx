@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "@/app/actions/auth";
 
 const menuItems = [
   {
@@ -61,9 +62,14 @@ export default function AdminSidebar() {
       </nav>
 
       <div className="border-t p-4">
-        <button className="w-full rounded-lg px-4 py-3 text-left text-sm text-gray-600 hover:bg-gray-100">
-          Logout
-        </button>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="w-full rounded-lg px-4 py-3 text-left text-sm text-gray-600 hover:bg-gray-100"
+          >
+            Logout
+          </button>
+        </form>
       </div>
     </aside>
   );
