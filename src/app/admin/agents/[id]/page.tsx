@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime, formatDuration, initials, startOfDay } from "@/lib/format";
+import EditAgentButton from "./EditAgentButton";
 
 export default async function AgentDetailPage({
   params,
@@ -22,6 +23,11 @@ export default async function AgentDetailPage({
   if (!agent) {
     notFound();
   }
+
+  const regions = await prisma.region.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
   const [callsToday, interestedLeads, convertedLeads, recentCalls] = await Promise.all([
     prisma.callLog.count({ where: { agentId: id, startedAt: { gte: today } } }),
@@ -81,12 +87,16 @@ export default async function AgentDetailPage({
           </div>
         </div>
 
-        <Link
-          href="/admin/leads"
-          className="w-fit rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-        >
-          View Leads
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <EditAgentButton agent={agent} regions={regions} />
+
+          <Link
+            href="/admin/leads"
+            className="w-fit rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            View Leads
+          </Link>
+        </div>
       </div>
 
       {/* Performance Stats */}
