@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import type { LeadStatus } from "@/generated/prisma";
 import { formatDateTime, initials, leadStatusLabels, leadStatusStyles } from "@/lib/format";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import Pagination from "@/components/ui/Pagination";
 
 type LeadRow = {
   id: string;
@@ -19,23 +20,19 @@ type LeadRow = {
 type Props = {
   leads: LeadRow[];
   regionName: string;
+  pagination: { page: number; total: number; pageSize: number };
+  filters: { q: string; status: string };
   stats: { total: number; newLeads: number; pendingFollowUps: number };
 };
 
-export default function AgentLeadsTable({ leads, regionName, stats }: Props) {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All Status");
-
-  const filteredLeads = leads.filter((lead) => {
-    const matchesSearch =
-      lead.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      lead.phone.includes(search) ||
-      (lead.vehicleInterest ?? "").toLowerCase().includes(search.toLowerCase());
-
-    const matchesStatus = status === "All Status" || lead.status === status;
-
-    return matchesSearch && matchesStatus;
-  });
+export default function AgentLeadsTable({
+  leads,
+  regionName,
+  pagination,
+  filters,
+  stats,
+}: Props) {
+  const { setDebounced, setImmediate } = useFilterParams();
 
   return (
     <div className="p-6 lg:p-8">
@@ -83,17 +80,17 @@ export default function AgentLeadsTable({ leads, regionName, stats }: Props) {
           <input
             type="text"
             placeholder="Search name, phone or vehicle..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            defaultValue={filters.q}
+            onChange={(e) => setDebounced("q", e.target.value)}
             className="flex-1 rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-gray-400"
           />
 
           <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            value={filters.status}
+            onChange={(e) => setImmediate("status", e.target.value)}
             className="rounded-lg border px-4 py-2.5 text-sm outline-none"
           >
-            <option>All Status</option>
+            <option value="">All Status</option>
             {Object.entries(leadStatusLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -141,7 +138,7 @@ export default function AgentLeadsTable({ leads, regionName, stats }: Props) {
             </thead>
 
             <tbody className="divide-y">
-              {filteredLeads.map((lead) => (
+              {leads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -191,7 +188,7 @@ export default function AgentLeadsTable({ leads, regionName, stats }: Props) {
                 </tr>
               ))}
 
-              {filteredLeads.length === 0 && (
+              {leads.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-400">
                     No leads match your filters.
@@ -202,22 +199,12 @@ export default function AgentLeadsTable({ leads, regionName, stats }: Props) {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
-            Showing {filteredLeads.length} of {stats.total} leads
-          </p>
-
-          <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Previous
-            </button>
-
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          itemLabel="leads"
+        />
       </div>
     </div>
   );
