@@ -1,19 +1,42 @@
 import { prisma } from "@/lib/prisma";
-import { startOfDay } from "@/lib/format";
+import { PAGE_SIZE, startOfDay } from "@/lib/format";
+import type { Prisma, UserStatus } from "@/generated/prisma";
 import AgentsTable from "./AgentsTable";
 
-export default async function AgentsPage() {
+type SearchParams = { q?: string; region?: string; status?: string; page?: string };
+
+export default async function AgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
+  const page = Math.max(1, Number(params.page) || 1);
   const today = startOfDay(new Date());
 
-  const [agents, regions, totalAgents, activeAgents] = await Promise.all([
+  const where: Prisma.UserWhereInput = { role: "AGENT" };
+
+  if (params.q) {
+    where.OR = [
+      { name: { contains: params.q, mode: "insensitive" } },
+      { email: { contains: params.q, mode: "insensitive" } },
+    ];
+  }
+  if (params.region) where.region = { name: params.region };
+  if (params.status) where.status = params.status as UserStatus;
+
+  const [agents, filteredTotal, regions, totalAgents, activeAgents] = await Promise.all([
     prisma.user.findMany({
-      where: { role: "AGENT" },
+      where,
       orderBy: { name: "asc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: {
         region: { select: { name: true } },
         _count: { select: { assignedLeads: true } },
       },
     }),
+    prisma.user.count({ where }),
     prisma.region.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.user.count({ where: { role: "AGENT" } }),
     prisma.user.count({ where: { role: "AGENT", status: "ACTIVE" } }),
@@ -32,6 +55,8 @@ export default async function AgentsPage() {
     <AgentsTable
       agents={agentsWithCalls}
       regions={regions}
+      pagination={{ page, total: filteredTotal, pageSize: PAGE_SIZE }}
+      filters={{ q: params.q ?? "", region: params.region ?? "", status: params.status ?? "" }}
       stats={{ total: totalAgents, active: activeAgents, inactive: totalAgents - activeAgents }}
     />
   );

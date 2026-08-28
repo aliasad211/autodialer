@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { initials } from "@/lib/format";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import Pagination from "@/components/ui/Pagination";
+import AddAgentModal from "./AddAgentModal";
 
 type AgentRow = {
   id: string;
@@ -17,24 +20,14 @@ type AgentRow = {
 type Props = {
   agents: AgentRow[];
   regions: { id: string; name: string }[];
+  pagination: { page: number; total: number; pageSize: number };
+  filters: { q: string; region: string; status: string };
   stats: { total: number; active: number; inactive: number };
 };
 
-export default function AgentsTable({ agents, regions, stats }: Props) {
-  const [search, setSearch] = useState("");
-  const [region, setRegion] = useState("All Regions");
-  const [status, setStatus] = useState("All Status");
-
-  const filteredAgents = agents.filter((agent) => {
-    const matchesSearch =
-      agent.name.toLowerCase().includes(search.toLowerCase()) ||
-      agent.email.toLowerCase().includes(search.toLowerCase());
-
-    const matchesRegion = region === "All Regions" || agent.region?.name === region;
-    const matchesStatus = status === "All Status" || agent.status === status;
-
-    return matchesSearch && matchesRegion && matchesStatus;
-  });
+export default function AgentsTable({ agents, regions, pagination, filters, stats }: Props) {
+  const { setDebounced, setImmediate } = useFilterParams();
+  const [showAddModal, setShowAddModal] = useState(false);
 
   return (
     <div className="p-6 lg:p-8">
@@ -48,38 +41,47 @@ export default function AgentsTable({ agents, regions, stats }: Props) {
           </p>
         </div>
 
-        <button className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+        >
           + Add Agent
         </button>
       </div>
+
+      {showAddModal && (
+        <AddAgentModal regions={regions} onClose={() => setShowAddModal(false)} />
+      )}
 
       {/* Search & Filter */}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
           placeholder="Search agents..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          defaultValue={filters.q}
+          onChange={(e) => setDebounced("q", e.target.value)}
           className="w-full rounded-lg border bg-white px-4 py-2.5 text-sm outline-none focus:border-gray-400 sm:max-w-sm"
         />
 
         <select
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
+          value={filters.region}
+          onChange={(e) => setImmediate("region", e.target.value)}
           className="rounded-lg border bg-white px-4 py-2.5 text-sm outline-none"
         >
-          <option>All Regions</option>
+          <option value="">All Regions</option>
           {regions.map((r) => (
-            <option key={r.id}>{r.name}</option>
+            <option key={r.id} value={r.name}>
+              {r.name}
+            </option>
           ))}
         </select>
 
         <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          value={filters.status}
+          onChange={(e) => setImmediate("status", e.target.value)}
           className="rounded-lg border bg-white px-4 py-2.5 text-sm outline-none"
         >
-          <option>All Status</option>
+          <option value="">All Status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
@@ -131,7 +133,7 @@ export default function AgentsTable({ agents, regions, stats }: Props) {
             </thead>
 
             <tbody className="divide-y">
-              {filteredAgents.map((agent) => (
+              {agents.map((agent) => (
                 <tr key={agent.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -181,7 +183,7 @@ export default function AgentsTable({ agents, regions, stats }: Props) {
                 </tr>
               ))}
 
-              {filteredAgents.length === 0 && (
+              {agents.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-400">
                     No agents match your filters.
@@ -192,22 +194,12 @@ export default function AgentsTable({ agents, regions, stats }: Props) {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t px-6 py-4">
-          <p className="text-sm text-gray-500">
-            Showing {filteredAgents.length} of {stats.total} agents
-          </p>
-
-          <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Previous
-            </button>
-
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          itemLabel="agents"
+        />
       </div>
     </div>
   );
