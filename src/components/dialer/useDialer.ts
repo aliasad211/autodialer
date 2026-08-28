@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Call, Device } from "@twilio/voice-sdk";
+import type PlivoBrowserSdk from "plivo-browser-sdk";
 
 export type DialerState = "idle" | "connecting" | "ringing" | "in-call" | "error";
 
+type PlivoInstance = InstanceType<typeof PlivoBrowserSdk>;
+
 export function useDialer() {
-  const deviceRef = useRef<Device | null>(null);
-  const callRef = useRef<Call | null>(null);
+  const plivoRef = useRef<PlivoInstance | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [state, setState] = useState<DialerState>("idle");
@@ -21,8 +22,8 @@ export function useDialer() {
     }
   }, []);
 
-  const ensureDevice = useCallback(async () => {
-    if (deviceRef.current) return deviceRef.current;
+  const ensureClient = useCallback(async () => {
+    if (plivoRef.current) return plivoRef.current;
 
     const res = await fetch("/api/voice/token", { method: "POST" });
     if (!res.ok) {
@@ -31,11 +32,29 @@ export function useDialer() {
     }
     const { token } = (await res.json()) as { token: string };
 
-    const { Device: DeviceClass } = await import("@twilio/voice-sdk");
-    const device = new DeviceClass(token, { logLevel: "error" });
-    deviceRef.current = device;
-    return device;
-  }, []);
+    const { default: Plivo } = await import("plivo-browser-sdk");
+    const plivo = new Plivo({ permOnClick: true });
+
+    plivo.client.on("onCallRemoteRinging", () => setState("ringing"));
+    plivo.client.on("onCallAnswered", () => {
+      setState("in-call");
+      setSeconds(0);
+      stopTimer();
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    });
+    plivo.client.on("onCallTerminated", () => {
+      stopTimer();
+      setState("idle");
+    });
+    plivo.client.on("onLoginFailed", () => {
+      setError("Could not connect the dialer. Check your Plivo setup.");
+      setState("error");
+    });
+
+    plivo.client.loginWithAccessToken(token);
+    plivoRef.current = plivo;
+    return plivo;
+  }, [stopTimer]);
 
   const call = useCallback(
     async (to: string, params: Record<string, string> = {}) => {
@@ -43,50 +62,28 @@ export function useDialer() {
       setState("connecting");
 
       try {
-        const device = await ensureDevice();
-        const twilioCall = await device.connect({ params: { To: to, ...params } });
-        callRef.current = twilioCall;
-
-        twilioCall.on("ringing", () => setState("ringing"));
-
-        twilioCall.on("accept", () => {
-          setState("in-call");
-          setSeconds(0);
-          stopTimer();
-          timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-        });
-
-        const onEnd = () => {
-          stopTimer();
-          setState("idle");
-          callRef.current = null;
-        };
-
-        twilioCall.on("disconnect", onEnd);
-        twilioCall.on("cancel", onEnd);
-
-        twilioCall.on("error", (err: Error) => {
-          setError(err.message);
-          setState("error");
-          stopTimer();
-        });
+        const plivo = await ensureClient();
+        const extraHeaders = Object.fromEntries(
+          Object.entries(params).map(([key, value]) => [`X-PH-${key}`, value])
+        );
+        plivo.client.call(to, extraHeaders);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Call failed.");
         setState("error");
       }
     },
-    [ensureDevice, stopTimer]
+    [ensureClient]
   );
 
   const hangUp = useCallback(() => {
-    callRef.current?.disconnect();
+    plivoRef.current?.client.hangup();
   }, []);
 
   useEffect(() => {
     return () => {
       stopTimer();
-      callRef.current?.disconnect();
-      deviceRef.current?.destroy();
+      plivoRef.current?.client.hangup();
+      plivoRef.current?.client.logout();
     };
   }, [stopTimer]);
 
