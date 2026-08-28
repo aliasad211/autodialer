@@ -94,6 +94,8 @@ export function startOfDay(date: Date) {
   return d;
 }
 
+export const PAGE_SIZE = 20;
+
 export type DateRangeKey = "7" | "30" | "month" | "lastmonth" | "year";
 
 export function resolveDateRange(key: string | undefined) {
